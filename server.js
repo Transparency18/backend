@@ -6,10 +6,10 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 
 const app = express();
-// Frontends allowed to call this API, comma-separated in CORS_ORIGINS.
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+// Frontends allowed to call this API: CORS_ORIGINS (comma-separated) overrides the default.
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,https://transparency-lyart.vercel.app')
     .split(',')
-    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .map((origin) => origin.trim().replace(/[/]+$/, ''))
     .filter(Boolean);
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
@@ -54,3 +54,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
