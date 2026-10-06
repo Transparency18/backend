@@ -11,7 +11,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{10,15}$/;
 const EXT_BY_TYPE = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-function validateRegistration(body, file) {
+function validateRegistration(body) {
     const errors = {};
     if (!body.name) errors.name = 'Name is required.';
     if (!EMAIL_RE.test(body.email)) errors.email = 'Enter a valid email address.';
@@ -19,7 +19,6 @@ function validateRegistration(body, file) {
     if (!PHASES.includes(body.phase)) errors.phase = 'Select a valid phase.';
     if (!body.villaNo) errors.villaNo = 'Villa number is required.';
     if (!body.password || body.password.length < 8) errors.password = 'Password must be at least 8 characters.';
-    if (!file) errors.photo = 'Profile photo is required.';
     return errors;
 }
 
@@ -35,15 +34,15 @@ router.post('/register', uploadPhoto, async (req, res) => {
         password: input.password,
     };
 
-    const errors = validateRegistration(body, req.file);
+    const errors = validateRegistration(body);
     if (Object.keys(errors).length) {
         return res.status(400).json({ message: 'Please fix the highlighted fields.', errors });
     }
 
-    // Shrink photos over 1 MB before anything is created.
-    let photo;
+    // Photo is optional. Shrink it to under 1 MB before anything is created.
+    let photo = null;
     try {
-        photo = await compressImage(req.file.buffer, req.file.mimetype);
+        if (req.file) photo = await compressImage(req.file.buffer, req.file.mimetype);
     } catch (err) {
         console.error('Photo compression failed:', err.message);
         return res.status(400).json({
@@ -72,17 +71,21 @@ router.post('/register', uploadPhoto, async (req, res) => {
         await supabaseAdmin.auth.admin.deleteUser(userId);
     };
 
-    // 2. Upload the profile photo.
-    const photoPath = `${userId}/profile.${EXT_BY_TYPE[photo.mimetype]}`;
-    const { error: uploadError } = await supabaseAdmin.storage
-        .from(PHOTO_BUCKET)
-        .upload(photoPath, photo.buffer, { contentType: photo.mimetype, upsert: true });
-    if (uploadError) {
-        await rollback();
-        console.error('Photo upload failed:', uploadError.message);
-        return res.status(500).json({ message: 'Could not upload profile photo. Please try again.' });
+    // 2. Upload the profile photo, if one was given.
+    let photoPath = null;
+    let photoUrl = null;
+    if (photo) {
+        photoPath = `${userId}/profile.${EXT_BY_TYPE[photo.mimetype]}`;
+        const { error: uploadError } = await supabaseAdmin.storage
+            .from(PHOTO_BUCKET)
+            .upload(photoPath, photo.buffer, { contentType: photo.mimetype, upsert: true });
+        if (uploadError) {
+            await rollback();
+            console.error('Photo upload failed:', uploadError.message);
+            return res.status(500).json({ message: 'Could not upload profile photo. Please try again.' });
+        }
+        photoUrl = supabaseAdmin.storage.from(PHOTO_BUCKET).getPublicUrl(photoPath).data.publicUrl;
     }
-    const photoUrl = supabaseAdmin.storage.from(PHOTO_BUCKET).getPublicUrl(photoPath).data.publicUrl;
 
     // 3. Save the profile row.
     const { data: profile, error: dbError } = await supabaseAdmin

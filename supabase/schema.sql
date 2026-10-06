@@ -6,10 +6,10 @@ create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
   name        text not null,
   email       text not null unique,
-  phone       text,  -- phone, phase, villa_no and photo_url are required on the
-  phase       text,  -- register form; they stay empty only for volunteer accounts
-  villa_no    text,  -- created with "npm run db:seed-volunteer"
-  photo_url   text,
+  phone       text,  -- phone, phase and villa_no are required on the register form;
+  phase       text,  -- they stay empty only for volunteer accounts created with
+  villa_no    text,  -- "npm run db:seed-volunteer"
+  photo_url   text,  -- optional
   role        text not null default 'member' check (role in ('member', 'volunteer', 'guard')),
   created_at  timestamptz not null default now()
 );
