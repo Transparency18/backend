@@ -5,7 +5,7 @@
 create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
   name        text not null,
-  email       text not null unique,
+  email       text unique,  -- optional; login is by mobile number
   phone       text,  -- phone, phase and villa_no are required on the register form;
   phase       text,  -- they stay empty only for volunteer accounts created with
   villa_no    text,  -- "npm run db:seed-volunteer"
@@ -26,6 +26,15 @@ alter table public.profiles
   alter column phase drop not null,
   alter column villa_no drop not null,
   alter column photo_url drop not null;
+
+-- Login by mobile number: email optional, one account per number.
+alter table public.profiles alter column email drop not null;
+update public.profiles set email = null where email = '';
+-- Store numbers in one format ("+91 98765 43210" -> "9876543210"), matching lib/phone.js.
+update public.profiles
+  set phone = regexp_replace(regexp_replace(phone, '[\s()-]', '', 'g'), '^\+?91(\d{10})$', '\1')
+  where phone is not null;
+create unique index if not exists profiles_phone_key on public.profiles (phone);
 
 -- RLS on with no policies: only the backend (secret key) can read/write.
 alter table public.profiles enable row level security;

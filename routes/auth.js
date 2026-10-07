@@ -2,6 +2,7 @@ const express = require('express');
 const { supabaseAdmin, createAuthClient } = require('../lib/supabase');
 const { uploadPhoto } = require('../middleware/upload');
 const { compressImage } = require('../lib/compressImage');
+const { normalizePhone, placeholderEmail } = require('../lib/phone');
 
 const router = express.Router();
 
@@ -13,12 +14,13 @@ const EXT_BY_TYPE = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'we
 
 function validateRegistration(body) {
     const errors = {};
-    if (!body.name) errors.name = 'Name is required.';
-    if (!EMAIL_RE.test(body.email)) errors.email = 'Enter a valid email address.';
-    if (!PHONE_RE.test(body.phone)) errors.phone = 'Enter a valid phone number (10-15 digits).';
-    if (!PHASES.includes(body.phase)) errors.phase = 'Select a valid phase.';
-    if (!body.villaNo) errors.villaNo = 'Villa number is required.';
-    if (!body.password || body.password.length < 8) errors.password = 'Password must be at least 8 characters.';
+    if (!body.name) errors.name = "Name is required.";
+    if (body.email && !EMAIL_RE.test(body.email)) errors.email = "Enter a valid email address.";
+    if (!body.phone) errors.phone = "Mobile number is required.";
+    else if (!PHONE_RE.test(body.phone)) errors.phone = "Enter a valid phone number (10-15 digits).";
+    if (!PHASES.includes(body.phase)) errors.phase = "Select a valid phase.";
+    if (!body.villaNo) errors.villaNo = "Villa number is required.";
+    if (!body.password || body.password.length < 8) errors.password = "Password must be at least 8 characters.";
     return errors;
 }
 
@@ -27,8 +29,8 @@ router.post('/register', uploadPhoto, async (req, res) => {
     const input = req.body || {};
     const body = {
         name: input.name?.trim(),
-        email: input.email?.trim().toLowerCase(),
-        phone: input.phone?.replace(/[\s-]/g, ''),
+        email: input.email?.trim().toLowerCase() || null,
+        phone: normalizePhone(input.phone),
         phase: input.phase,
         villaNo: input.villaNo?.trim(),
         password: input.password,
@@ -51,9 +53,18 @@ router.post('/register', uploadPhoto, async (req, res) => {
         });
     }
 
-    // 1. Create the login account.
+    // The mobile number is the login id, so it must be unique.
+    const { data: existing } = await supabaseAdmin.from('profiles').select('id').eq('phone', body.phone).maybeSingle();
+    if (existing) {
+        return res.status(409).json({
+            message: 'This mobile number is already registered. Please log in.',
+            errors: { phone: 'This mobile number is already registered.' },
+        });
+    }
+
+    // 1. Create the login account (Supabase Auth needs an email; use a placeholder if none given).
     const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: body.email,
+        email: body.email || placeholderEmail(body.phone),
         password: body.password,
         email_confirm: true,
     });
@@ -61,6 +72,7 @@ router.post('/register', uploadPhoto, async (req, res) => {
         const taken = authError.code === 'email_exists' || /already/i.test(authError.message);
         return res.status(taken ? 409 : 400).json({
             message: taken ? 'An account with this email already exists.' : authError.message,
+            errors: taken ? { email: 'This email is already registered.' } : undefined,
         });
     }
     const userId = created.user.id;
@@ -110,17 +122,27 @@ router.post('/register', uploadPhoto, async (req, res) => {
     res.status(201).json({ message: 'Registration successful. You can now log in.', user: profile });
 });
 
-// POST /api/auth/login  { email, password }
+// POST /api/auth/login  { phone, password } - "phone" may also be an email address.
 router.post('/login', async (req, res) => {
-    const email = req.body?.email?.trim().toLowerCase();
+    const identifier = req.body?.phone?.trim();
     const password = req.body?.password;
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required.' });
+    if (!identifier || !password) {
+        return res.status(400).json({ message: 'Mobile number and password are required.' });
     }
 
-    const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
+    // Find the email Supabase Auth knows this user by.
+    let loginEmail;
+    if (identifier.includes('@')) {
+        loginEmail = identifier.toLowerCase();
+    } else {
+        const phone = normalizePhone(identifier);
+        const { data: prof } = await supabaseAdmin.from('profiles').select('email').eq('phone', phone).maybeSingle();
+        loginEmail = prof?.email || placeholderEmail(phone);
+    }
+
+    const { data, error } = await createAuthClient().auth.signInWithPassword({ email: loginEmail, password });
     if (error) {
-        return res.status(401).json({ message: 'Invalid email or password.' });
+        return res.status(401).json({ message: 'Invalid mobile number or password.' });
     }
 
     const { data: profile, error: dbError } = await supabaseAdmin
@@ -153,3 +175,8 @@ router.post('/refresh', async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+

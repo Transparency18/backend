@@ -2,6 +2,7 @@
 // Usage: npm run db:seed-volunteer   (safe to run more than once)
 require('dotenv').config({ quiet: true });
 const { supabaseAdmin } = require('../lib/supabase');
+const { normalizePhone } = require('../lib/phone');
 
 async function findUserByEmail(email) {
     for (let page = 1; ; page++) {
@@ -16,6 +17,7 @@ async function main() {
     const email = process.env.VOLUNTEER_EMAIL?.trim().toLowerCase();
     const name = process.env.VOLUNTEER_NAME?.trim();
     const password = process.env.VOLUNTEER_PASSWORD;
+    const phone = normalizePhone(process.env.VOLUNTEER_PHONE) || null; // login by mobile number
     if (!email || !name || !password) {
         throw new Error('Set VOLUNTEER_EMAIL, VOLUNTEER_NAME and VOLUNTEER_PASSWORD in .env');
     }
@@ -32,10 +34,13 @@ async function main() {
 
     const { error } = await supabaseAdmin
         .from('profiles')
-        .upsert({ id: user.id, email, name, role: 'volunteer' }, { onConflict: 'id' });
-    if (error) throw error;
+        .upsert({ id: user.id, email, name, phone, role: 'volunteer' }, { onConflict: 'id' });
+    if (error) {
+        if (error.code === '23505') throw new Error(`Mobile number ${phone} is already used by another account.`);
+        throw error;
+    }
 
-    console.log(`Volunteer ready: ${name} <${email}>`);
+    console.log(`Volunteer ready: ${name} <${email}>${phone ? `, mobile ${phone}` : ''}`);
 }
 
 main().catch((err) => {
