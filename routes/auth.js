@@ -6,7 +6,7 @@ const { normalizePhone, placeholderEmail } = require('../lib/phone');
 
 const router = express.Router();
 
-const PHASES = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
+const PHASES = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 's1', 's2', 's3'];
 const PHOTO_BUCKET = 'avatars';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{10,15}$/;
@@ -175,6 +175,7 @@ router.post('/refresh', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
