@@ -43,3 +43,29 @@ alter table public.profiles enable row level security;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('avatars', 'avatars', true, 1048576, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
+
+-- Complaints reported by members, guards and volunteers (Complains page).
+-- Who can do what is enforced in routes/complaints.js.
+create table if not exists public.complaints (
+  id               uuid primary key default gen_random_uuid(),
+  ticket_no        bigint generated always as identity,
+  category         text not null,
+  description      text not null,
+  location         text,
+  phase            text not null,
+  priority         text not null default 'Medium' check (priority in ('Low', 'Medium', 'High')),
+  status           text not null default 'Open' check (status in ('Open', 'In Progress', 'Resolved', 'Closed')),
+  reported_by      uuid references public.profiles (id) on delete set null,
+  reporter_name    text not null,
+  reporter_role    text not null,
+  reporter_villa   text,
+  reply            text,
+  replied_by_name  text,
+  replied_at       timestamptz,
+  resolved_at      timestamptz,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create index if not exists complaints_reported_by_idx on public.complaints (reported_by);
+create index if not exists complaints_created_at_idx on public.complaints (created_at desc);
+alter table public.complaints enable row level security;

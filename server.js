@@ -4,6 +4,7 @@ const cors = require('cors');
 const { supabaseUrl } = require('./lib/supabase');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const { router: complaintRoutes } = require('./routes/complaints');
 
 const app = express();
 // Frontends allowed to call this API: CORS_ORIGINS (comma-separated) overrides the default.
@@ -43,6 +44,7 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/complaints', complaintRoutes);
 
 // Return JSON instead of an HTML stack trace for unexpected errors.
 app.use((err, req, res, next) => {

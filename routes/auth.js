@@ -3,10 +3,10 @@ const { supabaseAdmin, createAuthClient } = require('../lib/supabase');
 const { uploadPhoto } = require('../middleware/upload');
 const { compressImage } = require('../lib/compressImage');
 const { normalizePhone, placeholderEmail } = require('../lib/phone');
+const { PHASES } = require('../lib/phases');
 
 const router = express.Router();
 
-const PHASES = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 's1', 's2', 's3'];
 const PHOTO_BUCKET = 'avatars';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{10,15}$/;
@@ -122,23 +122,20 @@ router.post('/register', uploadPhoto, async (req, res) => {
     res.status(201).json({ message: 'Registration successful. You can now log in.', user: profile });
 });
 
-// POST /api/auth/login  { phone, password } - "phone" may also be an email address.
+// POST /api/auth/login  { phone, password }
 router.post('/login', async (req, res) => {
-    const identifier = req.body?.phone?.trim();
+    const phone = normalizePhone(req.body?.phone);
     const password = req.body?.password;
-    if (!identifier || !password) {
+    if (!phone || !password) {
         return res.status(400).json({ message: 'Mobile number and password are required.' });
     }
-
-    // Find the email Supabase Auth knows this user by.
-    let loginEmail;
-    if (identifier.includes('@')) {
-        loginEmail = identifier.toLowerCase();
-    } else {
-        const phone = normalizePhone(identifier);
-        const { data: prof } = await supabaseAdmin.from('profiles').select('email').eq('phone', phone).maybeSingle();
-        loginEmail = prof?.email || placeholderEmail(phone);
+    if (!PHONE_RE.test(phone)) {
+        return res.status(400).json({ message: 'Enter a valid mobile number.' });
     }
+
+    // Supabase Auth signs in by email: use the profile's email, or the placeholder for phone-only users.
+    const { data: prof } = await supabaseAdmin.from('profiles').select('email').eq('phone', phone).maybeSingle();
+    const loginEmail = prof?.email || placeholderEmail(phone);
 
     const { data, error } = await createAuthClient().auth.signInWithPassword({ email: loginEmail, password });
     if (error) {
