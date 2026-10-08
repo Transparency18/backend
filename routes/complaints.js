@@ -18,10 +18,16 @@ const STATUS_BY_ROLE = {
     volunteer: ['Open', 'In Progress', 'Resolved', 'Closed'],
 };
 
-// GET /api/complaints - members see their own; guards and volunteers see all. Newest first.
+// GET /api/complaints - members see all complaints in their phase (plus their own);
+// guards and volunteers see all. Newest first.
 router.get('/', requireAuth, async (req, res) => {
     let query = supabaseAdmin.from('complaints').select('*').order('created_at', { ascending: false });
-    if (req.profile.role === 'member') query = query.eq('reported_by', req.profile.id);
+    if (req.profile.role === 'member') {
+        const { id, phase } = req.profile;
+        query = PHASES.includes(phase)
+            ? query.or(`phase.eq.${phase},reported_by.eq.${id}`)
+            : query.eq('reported_by', id);
+    }
 
     const { data, error } = await query;
     if (error) {
