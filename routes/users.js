@@ -37,6 +37,21 @@ router.get('/', requireAuth, requireRole('volunteer'), async (req, res) => {
     res.json({ users: data.map((u) => ({ ...u, locked: isOwner(u) })) });
 });
 
+// GET /api/users/guards - everyone with the guard role (Security Guards page). Any logged-in user;
+// volunteers change roles and delete guards through the routes below.
+router.get('/guards', requireAuth, async (req, res) => {
+    const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id, name, phone, phase, photo_url, created_at')
+        .eq('role', 'guard')
+        .order('name', { ascending: true });
+    if (error) {
+        console.error('Guard list failed:', error.message);
+        return res.status(500).json({ message: 'Could not load security guards.' });
+    }
+    res.json({ guards: data });
+});
+
 // PATCH /api/users/:id/role  { role } - change a user's role. Volunteers only.
 router.patch('/:id/role', requireAuth, requireRole('volunteer'), async (req, res) => {
     const role = req.body?.role;

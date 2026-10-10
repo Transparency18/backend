@@ -69,3 +69,38 @@ create table if not exists public.complaints (
 create index if not exists complaints_reported_by_idx on public.complaints (reported_by);
 create index if not exists complaints_created_at_idx on public.complaints (created_at desc);
 alter table public.complaints enable row level security;
+
+-- CCTV cameras (CCTV Cameras page). Who can do what is enforced in routes/cameras.js.
+create table if not exists public.cameras (
+  id                      uuid primary key default gen_random_uuid(),
+  camera_no               bigint generated always as identity,  -- shown as CAM-001
+  name                    text not null,
+  phase                   text not null,
+  location                text not null,
+  type                    text not null default 'Bullet' check (type in ('Bullet', 'Dome', 'PTZ', 'Other')),
+  status                  text not null default 'Working' check (status in ('Working', 'Not Working', 'Under Maintenance')),
+  status_note             text,
+  status_updated_by_name  text,
+  status_updated_at       timestamptz,
+  last_maintenance        date,
+  notes                   text,
+  created_by              uuid references public.profiles (id) on delete set null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+create index if not exists cameras_phase_idx on public.cameras (phase);
+alter table public.cameras enable row level security;
+
+-- Every status change, so residents can see when a camera went down and who fixed it.
+create table if not exists public.camera_status_log (
+  id               uuid primary key default gen_random_uuid(),
+  camera_id        uuid not null references public.cameras (id) on delete cascade,
+  status           text not null,
+  note             text,
+  changed_by       uuid references public.profiles (id) on delete set null,
+  changed_by_name  text not null,
+  changed_by_role  text not null,
+  created_at       timestamptz not null default now()
+);
+create index if not exists camera_status_log_camera_idx on public.camera_status_log (camera_id, created_at desc);
+alter table public.camera_status_log enable row level security;

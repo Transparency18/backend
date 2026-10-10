@@ -21,7 +21,7 @@ async function main() {
         await client.query(sql);
         // Make the Supabase API see the new table immediately.
         await client.query("notify pgrst, 'reload schema'");
-        console.log('Database setup complete: profiles table and avatars bucket are ready.');
+        console.log('Database setup complete: tables and avatars bucket are ready.');
     } finally {
         await client.end();
     }
